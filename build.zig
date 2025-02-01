@@ -26,6 +26,14 @@ pub fn build(b: *std.Build) void {
     // running the unit tests.
     const test_step = b.step("test", "Run unit tests");
 
+    const sdl3_lib = b.dependency("sdl", .{
+        .target = target,
+        .optimize = optimize,
+        .preferred_link_mode = .static, // or .dynamic
+    }).artifact("SDL3");
+
+    const stb_include_dir = b.dependency("stb", .{}).path("");
+
     // -------------------------[ Library ]-------------------------
 
     // This creates a "module", which represents a collection of source files alongside
@@ -40,6 +48,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    lib_mod.addIncludePath(stb_include_dir);
 
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
@@ -54,7 +63,7 @@ pub fn build(b: *std.Build) void {
             // only contains e.g. external object files, you can make this `null`.
             // In this case the main source file is merely a path, however, in more
             // complicated build scripts, this could be a generated file.
-            .root_source_file = b.path("src/" ++ app_name ++ "/main.zig"),
+            .root_source_file = b.path("src/" ++ app_name ++ "/sdl_app.zig"),
             .target = target,
             .optimize = optimize,
 
@@ -70,6 +79,7 @@ pub fn build(b: *std.Build) void {
             .name = app_name,
             .root_module = exe_mod,
         });
+        exe.linkLibrary(sdl3_lib);
 
         // This declares intent for the executable to be installed into the
         // standard location when the user invokes the "install" step (the default

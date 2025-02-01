@@ -1,7 +1,67 @@
+pub const GameSettings = @import("GameSettings.zig");
+pub const Renderer = @import("renderer.zig").Renderer;
 pub const Rot = @import("Rot.zig");
 pub const Vec2 = @import("Vec2.zig");
 /// 0.0023 degrees
 pub const atan_tol = 0.00004;
+pub usingnamespace struct {
+    pub const c = @import("c.zig");
+    pub var allocator: mem.Allocator = undefined;
+    pub var gpa: heap.GeneralPurposeAllocator(.{}) = undefined;
+    pub var game_settings: json.Parsed(GameSettings) = undefined;
+
+    pub fn deinit() void {
+        lib.game_settings.deinit();
+        lib.allocator = undefined;
+        _ = lib.gpa.deinit();
+    }
+
+    pub fn init(game_settings_filepath: []const u8) ?void {
+        lib.initErr(game_settings_filepath) catch |err| {
+            debug.print(
+                "opening '{s}':{}: {}\n",
+                .{ game_settings_filepath, lib.json_diagn.getLine(), err },
+            );
+            return null;
+        };
+    }
+
+    var json_diagn: json.Diagnostics = undefined;
+
+    fn initErr(game_settings_filepath: []const u8) !void {
+        lib.gpa = @TypeOf(lib.gpa).init;
+        lib.allocator = lib.gpa.allocator();
+
+        lib.json_diagn = json.Diagnostics{};
+
+        const file = try fs.cwd().openFile(game_settings_filepath, .{});
+        defer file.close();
+
+        var json_reader = json.reader(lib.allocator, file.reader());
+        defer json_reader.deinit();
+
+        json_reader.enableDiagnostics(&lib.json_diagn);
+
+        lib.game_settings = try json.parseFromTokenSource(
+            GameSettings,
+            lib.allocator,
+            &json_reader,
+            .{},
+        );
+    }
+};
+pub const mem = std.mem;
+pub const meta = struct {
+    pub fn UnwrapOptional(optional: type) type {
+        return @typeInfo(optional).optional.child;
+    }
+};
+
+const debug = std.debug;
+const fs = std.fs;
+const heap = std.heap;
+const json = std.json;
+const lib = @This();
 const math = std.math;
 const std = @import("std");
 const testing = std.testing;

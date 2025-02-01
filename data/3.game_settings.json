@@ -1,0 +1,20 @@
+{
+    "game_name": "Pool End Game",
+    "renderer": { "width": 1024, "height": 531 },
+
+    "bitmap_font": "images/terminus-u24n-ascii.png",
+
+    "images": [
+        { "src": "images/3.pooltable1024x531.png" }  ],
+
+    "sprites": [
+        { "name": "vector", "file": "images/3.vector.png" },
+        { "name": "cueball", "file": "images/3.cueball.png" },
+        { "name": "eightball", "file": "images/3.eightball.png" }  ],
+
+    "sound": { "level": 0, "cps": 1, "bps": 8, "rate": 22050 },
+    "sounds": [
+        { "file": "sounds/3.cue.wav", "copies": 1 },
+        { "file": "sounds/3.ballclick.wav", "copies": 4 },
+        { "file": "sounds/3.thump.wav", "copies": 4 },
+        { "file": "sounds/3.pocket.wav", "copies": 2 }  ]    }
