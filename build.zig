@@ -20,6 +20,8 @@ pub fn build(b: *std.Build) void {
     // and can be selected like this: `zig build run`
     // This will evaluate the `run` step rather than the default, which is "install".
     const run_step = b.step("run", "-- [app-name] [--arg...]");
+    defer if (run_step.dependencies.items.len == 0)
+        run_step.dependOn(&b.addFail("[app-name] isn't specified").step);
 
     // Similar to creating the run step above, this exposes a `test` step to
     // the `zig build --help` menu, providing a way for the user to request
@@ -32,7 +34,10 @@ pub fn build(b: *std.Build) void {
         .preferred_link_mode = .static, // or .dynamic
     }).artifact("SDL3");
 
-    const stb_include_dir = b.dependency("stb", .{}).path("");
+    const zigimg_mod = b.dependency("zigimg", .{
+        .target = target,
+        .optimize = optimize,
+    }).module("zigimg");
 
     // -------------------------[ Library ]-------------------------
 
@@ -48,11 +53,22 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    lib_mod.addIncludePath(stb_include_dir);
+    lib_mod.addImport("zigimg", zigimg_mod);
 
-    // Creates a step for unit testing. This only builds the test executable
-    // but does not run it.
-    test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = lib_mod })).step);
+    {
+        // Creates a step for unit testing. This only builds the test executable
+        // but does not run it.
+        const lib_unit_tests = b.addTest(.{ .root_module = lib_mod });
+        lib_unit_tests.linkLibrary(sdl3_lib);
+
+        test_step.dependOn(&b.addRunArtifact(lib_unit_tests).step);
+
+        b.step("docs", "Emit documentation").dependOn(&b.addInstallDirectory(.{
+            .source_dir = lib_unit_tests.getEmittedDocs(),
+            .install_dir = .prefix,
+            .install_subdir = "docs",
+        }).step);
+    }
 
     // -------------------------[ Executables ]-------------------------
 
@@ -91,8 +107,9 @@ pub fn build(b: *std.Build) void {
         // step is evaluated that depends on it. The next line below will establish
         // such a dependency.
         const run_cmd = b.addRunArtifact(exe);
-
         run_cmd.step.dependOn(&install_artifact.step);
+
+        test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = exe_mod })).step);
 
         // This allows the user to pass arguments to the application in the build command itself
         if (b.args) |args|
@@ -100,11 +117,6 @@ pub fn build(b: *std.Build) void {
                 run_cmd.addArgs(args[1..]);
                 run_step.dependOn(&run_cmd.step);
             };
-
         b.step(app_name, "Build the app").dependOn(&install_artifact.step);
-
-        test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = exe_mod })).step);
     }
-    if (run_step.dependencies.items.len == 0)
-        run_step.dependOn(&b.addFail("[app-name] isn't specified").step);
 }

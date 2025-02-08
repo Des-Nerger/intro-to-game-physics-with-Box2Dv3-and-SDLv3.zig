@@ -1,1 +1,1 @@
-pub const Type = enum { arrow, cueball, eightball };
+pub const Type = enum { vector_arrow, cueball, eightball };

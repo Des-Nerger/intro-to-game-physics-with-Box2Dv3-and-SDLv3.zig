@@ -1,10 +1,10 @@
 game_name: [:0]u8,
-renderer: struct { width: i32, height: i32 },
+renderer: struct { fps: u24, width: u24, height: u24 },
 bitmap_font: [:0]u8,
-images: []struct { src: [:0]u8 },
-sprites: []struct { name: [:0]u8, file: [:0]u8 },
-sound: struct { level: i32, cps: i32, bps: i32, rate: i32 },
-sounds: []struct { file: [:0]u8, copies: i32 },
+background: [:0]u8,
+sprites: [][:0]u8,
+sound: struct { rate: u24, volume: f32 },
+sounds: [][:0]u8,
 
 const Self = @This();
 const json = std.json;
@@ -16,52 +16,26 @@ test "parse and stringify back" {
         \\{
         \\    "game_name": "Game",
         \\    "renderer": {
+        \\        "fps": 120,
         \\        "width": 720,
         \\        "height": 480
         \\    },
-        \\    "bitmap_font": "images/bitmap-font.png",
-        \\    "images": [
-        \\        {
-        \\            "src": "images/image.png"
-        \\        }
-        \\    ],
+        \\    "bitmap_font": "images/bitmap_font_u13n_ascii.png",
+        \\    "background": "images/background.png",
         \\    "sprites": [
-        \\        {
-        \\            "name": "sprite_0",
-        \\            "file": "images/sprite-0.png"
-        \\        },
-        \\        {
-        \\            "name": "sprite_1",
-        \\            "file": "images/sprite-1.png"
-        \\        },
-        \\        {
-        \\            "name": "sprite_2",
-        \\            "file": "images/sprite-2.png"
-        \\        }
+        \\        "images/sprite_0.png",
+        \\        "images/sprite_1.png",
+        \\        "images/sprite_2.png"
         \\    ],
         \\    "sound": {
-        \\        "level": 0,
-        \\        "cps": 2,
-        \\        "bps": 16,
-        \\        "rate": 44100
+        \\        "rate": 44100,
+        \\        "volume": 8.00000011920929e-1
         \\    },
         \\    "sounds": [
-        \\        {
-        \\            "file": "sounds/sound-0.wav",
-        \\            "copies": 1
-        \\        },
-        \\        {
-        \\            "file": "sounds/sound-1.wav",
-        \\            "copies": 4
-        \\        },
-        \\        {
-        \\            "file": "sounds/sound-2.wav",
-        \\            "copies": 4
-        \\        },
-        \\        {
-        \\            "file": "sounds/sound-3.wav",
-        \\            "copies": 2
-        \\        }
+        \\        "sounds/sound_0.wav",
+        \\        "sounds/sound_1.wav",
+        \\        "sounds/sound_2.wav",
+        \\        "sounds/sound_3.wav"
         \\    ]
         \\}
     ;

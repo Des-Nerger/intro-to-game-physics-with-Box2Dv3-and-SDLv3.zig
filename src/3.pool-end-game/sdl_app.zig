@@ -1,35 +1,38 @@
 const ObjectWorld = @import("ObjectWorld.zig");
 const RenderWorldExt = @import("RenderWorldExt.zig");
-const builtin = @import("builtin");
 const c = lib.c;
+const debug = std.debug;
 const lib = @import("lib");
 const mem = std.mem;
-const meta = lib.meta;
+const sdl = lib.sdl;
 const std = @import("std");
-// const testing = std.testing;
+const testing = std.testing;
+const time = std.time;
 
-// test {
-//     testing.refAllDecls(@This());
-// }
+test {
+    testing.refAllDecls(@This());
+}
 
-// May be dummy, in case I'll implement an SDL3 subset using Libretro API, building the app as a shared library.
+/// May be dummy, in case I'll implement an SDL3 subset using Libretro API,
+/// building the app as a shared library.
 pub const main = c.main;
 
 pub const g = struct { // -ame or -lobal_vars
-    pub const State = enum {
-        balls_moving,
-        initial,
-        lost,
-        setting_upshot,
-        won,
-    };
+    /// These are the sounds used in actual gameplay. Sounds must be listed here in
+    /// the same order that they are in the sound settings JSON file.
+    pub const Sound = enum { cue, ballclick, thump, pocket };
+
+    pub const State = enum { balls_moving, initial, lost, setting_upshot, won };
     var state: State = undefined;
+
+    var sound_manager = lib.SoundManager{};
     var object_world: ObjectWorld = undefined;
-    var render_world: lib.Renderer(RenderWorldExt) = undefined;
+    var render_world = lib.Renderer(RenderWorldExt){};
+    var timer: time.Timer = undefined;
 
     /// Create all game objects.
     fn createObjects() void {
-        const screen_height: f32 = @floatFromInt(lib.game_settings.value.renderer.height);
+        const screen_height: f32 = @floatFromInt(lib.game_settings.renderer.height);
 
         // create 8 ball
         g.object_world.create(.eightball, lib.Vec2{ .x = 750.0, .y = screen_height / 2.0 });
@@ -41,38 +44,35 @@ pub const g = struct { // -ame or -lobal_vars
     }
 
     /// Start the game.
-    fn beginGame() void {
+    fn beginGame() !void {
         g.state = .initial; // playing state
-        // g.timer.startLevelTimer(); // starting level now
+        g.timer = try time.Timer.start(); // starting level now
         g.object_world = ObjectWorld.init(); // clear old objects
         g.createObjects(); // create new objects
-
-        // debug.print("Begin game at time {}\n", .{g.timer.time()});
     }
 
     /// Render a frame of animation.
-    fn renderFrame() void {
-        g.render_world.beginScene(); // start up graphics pipeline
-        g.render_world.drawBackground(); // draw the background
+    fn renderFrame() !void {
+        try g.render_world.beginScene(); // start up graphics pipeline
+        try g.render_world.drawBackground(); // draw the background
         g.object_world.draw(); // draw the objects
         g.render_world.maybeDrawWinLoseMessage(g.state);
-        g.render_world.endScene(); // shut down graphics pipeline
+        try g.render_world.endScene(); // shut down graphics pipeline
     }
 };
 
 comptime {
-    if (!builtin.is_test)
-        for (@typeInfo(@This()).@"struct".decls) |decl| {
-            if (!mem.startsWith(u8, decl.name, "SDL_App"))
-                continue;
-            const field = @field(@This(), decl.name);
-            if (@TypeOf(field) !=
-                @typeInfo(meta.UnwrapOptional(@field(c, decl.name ++ "_func"))).pointer.child)
-            {
-                @compileError("pub fn type mismatch: " ++ decl.name);
-            }
-            @export(&field, .{ .name = decl.name, .linkage = .strong });
-        };
+    for (@typeInfo(@This()).@"struct".decls) |decl| {
+        if (!mem.startsWith(u8, decl.name, "SDL_App"))
+            continue;
+        const field = @field(@This(), decl.name);
+        if (@TypeOf(field) !=
+            @typeInfo(lib.UnwrapOptional(@field(c, decl.name ++ "_func"))).pointer.child)
+        {
+            @compileError("pub fn type mismatch: " ++ decl.name);
+        }
+        @export(&field, .{ .name = decl.name, .linkage = .strong });
+    }
 }
 
 /// Initialize and start the game.
@@ -80,13 +80,14 @@ comptime {
 pub fn SDL_AppInit(_: [*c]?*anyopaque, argc: c_int, argv: [*c][*c]u8) callconv(.c) c.SDL_AppResult {
     _ = .{ argc, argv };
 
-    lib.init("data/3.game_settings.json") orelse return c.SDL_APP_FAILURE;
+    lib.init("data/3.game_settings.json") catch |err| return sdl.appFailure(err);
+    g.sound_manager = lib.SoundManager.init() catch |err| return sdl.appFailure(err);
 
     // set up Render World
-    g.render_world = @TypeOf(g.render_world).init() orelse return c.SDL_APP_FAILURE; // bails if it fails
-    g.render_world.loadImages() orelse return c.SDL_APP_FAILURE; // load images from .json file list
+    g.render_world = @TypeOf(g.render_world).init() catch |err| return sdl.appFailure(err); // bails if fails
+    g.render_world.loadImages() catch |err| return sdl.appFailure(err); // load images from .json file list
 
-    g.beginGame(); // now start the game
+    g.beginGame() catch |err| return sdl.appFailure(err); // now start the game
 
     return c.SDL_APP_CONTINUE; // carry on with the program!
 }
@@ -117,11 +118,12 @@ pub fn SDL_AppEvent(_: ?*anyopaque, event: [*c]c.SDL_Event) callconv(.c) c.SDL_A
                 else => {},
             },
             c.SDL_SCANCODE_Z => switch (g.state) {
-                .won, .lost => if (g.object_world.allBallsStopped()) g.beginGame(),
+                .won, .lost => if (g.object_world.allBallsStopped()) g.beginGame() catch |err|
+                    return sdl.appFailure(err),
                 .setting_upshot, .initial => {
                     g.state = .balls_moving;
                     g.object_world.shoot();
-                    // g.sound_manager.play(.cue_sound);
+                    g.sound_manager.play(@intFromEnum(g.Sound.cue));
                 },
                 else => {},
             },
@@ -137,10 +139,17 @@ pub fn SDL_AppEvent(_: ?*anyopaque, event: [*c]c.SDL_Event) callconv(.c) c.SDL_A
 /// Takes appropriate action if the player has won or lost.
 pub fn SDL_AppIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // stuff that gets done on every frame
-    // g.timer.beginFrame(); // capture current time
-    // g.sound_manager.beginFrame(); // no double sounds
+    // const nanosecs = g.timer.lap(); // capture time elapsed since last .lap or .start
+    g.sound_manager.beginFrame() catch |err| return sdl.appFailure(err); // no double sounds
+    // debug.print(
+    //     "milliseconds = {d:6.2}, stream_available = {}\n",
+    //     .{
+    //         @as(f64, @floatFromInt(nanosecs)) / time.ns_per_ms,
+    //         c.SDL_GetAudioStreamAvailable(g.sound_manager.stream),
+    //     },
+    // );
     g.object_world.move(); // move all objects
-    g.renderFrame(); // render a frame of animation
+    g.renderFrame() catch |err| return sdl.appFailure(err); // render a frame of animation
 
     // change game state to set up next shot, if necessary
     if (g.object_world.cueBallDown())
@@ -163,6 +172,16 @@ pub fn SDL_AppIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 pub fn SDL_AppQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
     _ = .{result};
 
-    g.render_world.deinit();
-    lib.deinit();
+    inline for (.{ &g.render_world, &g.sound_manager, lib }) |deinitable| {
+        const Deinitable = @TypeOf(deinitable);
+        const ty_info = @typeInfo(Deinitable);
+        if (!(if (ty_info == .type)
+            @hasDecl(deinitable, "is_inited")
+        else
+            @hasField(ty_info.pointer.child, "is_inited")) or deinitable.is_inited)
+        {
+            debug.print("{}.deinit()\n", .{Deinitable});
+            deinitable.deinit();
+        }
+    }
 }

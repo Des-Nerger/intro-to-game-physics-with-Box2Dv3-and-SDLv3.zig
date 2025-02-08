@@ -4,12 +4,12 @@ const g = @import("sdl_app.zig").g;
 const lib = @import("lib");
 
 /// Load game images. Gets file list from `*.game_settings.json`.
-pub fn loadImages(rw: *Self) ?void {
-    rw.loadBackground() orelse return null;
+pub fn loadImages(rw: *Self) !void {
+    try rw.loadBackground();
 
     // Load sprite for each object
-    for ([_]Object.Type{ .arrow, .cueball, .eightball }) |tag|
-        rw.load(@intFromEnum(tag), @tagName(tag)) orelse return null;
+    for ([_]Object.Type{ .vector_arrow, .cueball, .eightball }) |tag|
+        try rw.load(@intFromEnum(tag), @tagName(tag));
 }
 
 /// Tell the player whether they've won or lost by plastering a text banner across the screen.
