@@ -14,32 +14,102 @@ pub const c = @cImport({
     @cInclude("SDL3/SDL_main.h");
 });
 pub const sdl = struct {
+    var leaked_first_88: []u8 = &.{}; // FIXME
+
+    pub fn deinit() void {
+        const disabled = struct {
+            var fba = heap.FixedBufferAllocator.init(&.{});
+            var allocator = @This().fba.allocator();
+        };
+        sdl.expect(
+            @call(.auto, c.SDL_SetMemoryFunctions, sdl.memFns(&disabled.allocator)),
+            "",
+        ) catch unreachable;
+
+        // lib.allocator.free(sdl.leaked_first_88); // a hacky way to stop up the leak. FIXME
+        sdl.leaked_first_88 = &.{}; // FIXME
+    }
+
+    pub fn init(comptime allocator: *const mem.Allocator) !void {
+        try sdl.expect(@call(.auto, c.SDL_SetMemoryFunctions, sdl.memFns(allocator)), "");
+    }
+
+    pub fn memFns(comptime allocator: *const mem.Allocator) struct {
+        c.SDL_malloc_func,
+        c.SDL_calloc_func,
+        c.SDL_realloc_func,
+        c.SDL_free_func,
+    } {
+        const Allocator = struct {
+            fn malloc(size: usize) callconv(.c) ?*anyopaque {
+                const byte_slice = allocator.alloc(u8, @sizeOf(usize) + size) catch unreachable;
+                @as(*align(@alignOf(u8)) usize, @ptrCast(byte_slice.ptr)).* = byte_slice.len;
+                if (byte_slice.len == @sizeOf(usize) + 88 and leaked_first_88.len == 0) // FIXME
+                    sdl.leaked_first_88 = byte_slice; // FIXME
+                return byte_slice[@sizeOf(usize)..].ptr;
+            }
+            fn calloc(nmemb: usize, size: usize) callconv(.c) ?*anyopaque {
+                var byte_slice = allocator.alloc(u8, @sizeOf(usize) + nmemb * size) catch unreachable;
+                @as(*align(@alignOf(u8)) usize, @ptrCast(byte_slice.ptr)).* = byte_slice.len;
+                byte_slice = byte_slice[@sizeOf(usize)..];
+                @memset(byte_slice, 0);
+                return byte_slice.ptr;
+            }
+            fn realloc(maybe_ptr: ?*anyopaque, size: usize) callconv(.c) ?*anyopaque {
+                const ptr: [*]u8 = if (maybe_ptr) |ptr|
+                    @ptrFromInt(@intFromPtr(ptr) - @sizeOf(usize))
+                else
+                    return @This().malloc(size);
+                const saved_size = @as(*align(@alignOf(u8)) usize, @ptrCast(ptr)).*;
+                const byte_slice =
+                    allocator.realloc(ptr[0..saved_size], @sizeOf(usize) + size) catch unreachable;
+                @as(*align(@alignOf(u8)) usize, @ptrCast(byte_slice.ptr)).* = byte_slice.len;
+                return byte_slice[@sizeOf(usize)..].ptr;
+            }
+            fn free(maybe_ptr: ?*anyopaque) callconv(.c) void {
+                const ptr: [*]u8 =
+                    if (maybe_ptr) |ptr| @ptrFromInt(@intFromPtr(ptr) - @sizeOf(usize)) else return;
+                const saved_size = @as(*align(@alignOf(u8)) usize, @ptrCast(ptr)).*;
+                allocator.free(ptr[0..saved_size]);
+            }
+        };
+        return .{ Allocator.malloc, Allocator.calloc, Allocator.realloc, Allocator.free };
+    }
+
     pub fn appFailure(err: anyerror) c.SDL_AppResult {
-        if (err != error.Sdl)
-            debug.print("{}\n{?}\n", .{ err, @errorReturnTrace() });
+        const trace = @errorReturnTrace();
+        if (err == error.Sdl)
+            debug.print("{?}\n", .{trace})
+        else
+            debug.print("{}\n{?}\n", .{ err, trace });
         return c.SDL_APP_FAILURE;
     }
 
-    pub fn nonNull(sdl_fn_result: anytype) !*@typeInfo(@TypeOf(sdl_fn_result)).pointer.child {
+    fn NonNull(Parent: anytype) type {
+        const ty_info = @typeInfo(Parent);
+        return switch (ty_info) {
+            .pointer => |pointer| pointer.child,
+            .optional => |optional| @typeInfo(optional.child).pointer.child,
+            else => comptime unreachable,
+        };
+    }
+
+    pub fn nonNull(sdl_fn_result: anytype) !*sdl.NonNull(@TypeOf(sdl_fn_result)) {
         if (sdl_fn_result) |non_null| return non_null;
-        printError();
+        printError("");
         return error.Sdl;
     }
 
-    pub fn printError() void {
-        debug.print("SDL error: {s}\n", .{c.SDL_GetError()});
+    fn printError(prefix_msg: []const u8) void {
+        debug.print("{s}SDL error: {s}\n", .{ prefix_msg, c.SDL_GetError() });
     }
 
-    pub fn expect(sdl_fn_result: bool) !void {
+    pub fn expect(sdl_fn_result: bool, prefix_msg: []const u8) !void {
         if (sdl_fn_result) return;
-        printError();
+        printError(prefix_msg);
         return error.Sdl;
     }
 };
-
-pub fn UnwrapOptional(optional: type) type {
-    return @typeInfo(optional).optional.child;
-}
 
 /// https://stackoverflow.com/questions/46210708/atan2-approximation-with-11bits-in-mantissa-on-x86with-sse2-and-armwith-vfpv4
 pub fn atan2(y: f32, x: f32) f32 {
@@ -96,7 +166,9 @@ test digitSizeOf {
 
 //___________________/ encapsulated \___________________
 pub var is_inited = false;
-pub var allocator: mem.Allocator = undefined;
+pub usingnamespace struct {
+    pub var allocator: mem.Allocator = undefined;
+};
 pub var game_settings: *const GameSettings = undefined;
 
 pub fn deinit() void {
@@ -104,6 +176,8 @@ pub fn deinit() void {
     lib.game_settings = undefined;
     lib.game_settings_parsed.deinit();
     lib.game_settings_parsed = undefined;
+
+    sdl.deinit();
 
     lib.allocator = undefined;
     _ = lib.gpa.deinit();
@@ -114,14 +188,11 @@ pub fn init(game_settings_filepath: []const u8) !void {
     lib.gpa = @TypeOf(lib.gpa).init;
     lib.allocator = lib.gpa.allocator();
 
+    try sdl.init(&lib.allocator);
+
     {
         var json_diagn = json.Diagnostics{};
-        errdefer {
-            debug.print(
-                "opening '{s}':{}: ",
-                .{ game_settings_filepath, json_diagn.getLine() },
-            );
-        }
+        errdefer debug.print("opening '{s}':{}: ", .{ game_settings_filepath, json_diagn.getLine() });
 
         const file = try fs.cwd().openFile(game_settings_filepath, .{});
         defer file.close();
@@ -150,7 +221,7 @@ pub fn init(game_settings_filepath: []const u8) !void {
 }
 
 var game_settings_parsed: json.Parsed(GameSettings) = undefined;
-var gpa: heap.GeneralPurposeAllocator(.{}) = undefined;
+var gpa: heap.GeneralPurposeAllocator(.{}) = undefined; // .{ .safety = false }
 //¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯\ encapsulated /¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
 
 const builtin = @import("builtin");

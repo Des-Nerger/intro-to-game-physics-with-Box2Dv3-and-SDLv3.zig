@@ -4,6 +4,7 @@ buf: []Sample = undefined,
 playing: [simultaneous_max][]Sample = undefined,
 samples_per_frame: usize = undefined,
 sounds: [][]Sample = undefined,
+// i: u32 = 0, // for underruns debugging
 
 const Sample = i16;
 const Self = @This();
@@ -37,30 +38,24 @@ pub fn deinit(sm: *Self) void {
     c.SDL_DestroyAudioStream(sm.stream);
     c.SDL_QuitSubSystem(c.SDL_INIT_AUDIO);
     if (builtin.os.tag == .linux and !builtin.abi.isAndroid())
-        sdl.expect(c.SDL_ResetHint(c.SDL_HINT_AUDIO_DRIVER)) catch unreachable;
+        sdl.expect(c.SDL_ResetHint(c.SDL_HINT_AUDIO_DRIVER), "") catch unreachable;
 }
 
 pub fn init() !Self {
     if (builtin.os.tag == .linux and !builtin.abi.isAndroid())
-        try sdl.expect(c.SDL_SetHint(c.SDL_HINT_AUDIO_DRIVER, "pulseaudio"));
+        try sdl.expect(c.SDL_SetHint(c.SDL_HINT_AUDIO_DRIVER, "pulseaudio"), "");
     errdefer if (builtin.os.tag == .linux and !builtin.abi.isAndroid())
-        sdl.expect(c.SDL_ResetHint(c.SDL_HINT_AUDIO_DRIVER)) catch unreachable;
+        sdl.expect(c.SDL_ResetHint(c.SDL_HINT_AUDIO_DRIVER), "") catch unreachable;
 
-    if (!c.SDL_InitSubSystem(c.SDL_INIT_AUDIO)) {
-        debug.print("couldn't initialize SDL audio subsystem: {s}\n", .{c.SDL_GetError()});
-        return error.Sdl;
-    }
+    try sdl.expect(c.SDL_InitSubSystem(c.SDL_INIT_AUDIO), "couldn't initialize SDL audio subsystem: ");
     errdefer c.SDL_QuitSubSystem(c.SDL_INIT_AUDIO);
 
-    const stream = if (c.SDL_OpenAudioDeviceStream(
+    const stream = try sdl.nonNull(c.SDL_OpenAudioDeviceStream(
         c.SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
         &Self.masterSpec(),
         null,
         null,
-    )) |stream| stream else {
-        debug.print("couldn't create audio stream: {s}\n", .{c.SDL_GetError()});
-        return error.Sdl;
-    };
+    ));
     errdefer c.SDL_DestroyAudioStream(stream);
 
     const samples_per_frame = @divExact(lib.game_settings.sound.rate, lib.game_settings.renderer.fps);
@@ -81,7 +76,7 @@ pub fn init() !Self {
         var spec: c.SDL_AudioSpec = undefined;
         var maybe_audio_buf: ?[*]u8 = undefined;
         var audio_len_in_bytes: u32 = undefined;
-        try sdl.expect(c.SDL_LoadWAV(sound_filepath, &spec, &maybe_audio_buf, &audio_len_in_bytes));
+        try sdl.expect(c.SDL_LoadWAV(sound_filepath, &spec, &maybe_audio_buf, &audio_len_in_bytes), "");
         assert(meta.eql(spec, Self.masterSpec()));
         assert(0 != audio_len_in_bytes); // Let's made .wav's with no content illegal. Whatever SDL thinks.
         sound.* = @as([*]Sample, @ptrCast(@alignCast(maybe_audio_buf.?)))[0..@divExact(
@@ -93,7 +88,7 @@ pub fn init() !Self {
     }
 
     // SDL_OpenAudioDeviceStream starts the device paused. You have to tell it to start!
-    try sdl.expect(c.SDL_ResumeAudioStreamDevice(stream));
+    try sdl.expect(c.SDL_ResumeAudioStreamDevice(stream), "");
 
     return .{
         .is_inited = true,
@@ -122,10 +117,14 @@ pub fn beginFrame(sm: *Self) !void {
             buf.* +|= sample;
     }
 
+    // defer sm.i +%= 1;   // for underruns
+    // if (sm.i % 16 == 0) //     debugging
+
     // feed the new data to the stream. It will queue at the end,
     // and trickle out as the hardware needs more data.
     try sdl.expect(
         c.SDL_PutAudioStreamData(sm.stream, sm.buf.ptr, @intCast(sm.buf.len * @sizeOf(Self.Sample))),
+        "",
     );
 }
 

@@ -18,66 +18,76 @@ pub fn Renderer(Ext: type) type {
         // We will use this renderer to draw into this window every frame.
         renderer: *c.SDL_Renderer = undefined,
 
-        sprite: struct {
+        sprite: Self.Sprite = undefined,
+        background: *c.SDL_Texture = undefined,
+
+        const Self = @This();
+        const Sprite = struct {
             filepaths: @This().Filepaths,
             textures: []*c.SDL_Texture,
 
             pub const Filepaths = std.StringHashMap([]const u8);
-        } = undefined,
-        background: *c.SDL_Texture = undefined,
+        };
 
-        const Self = @This();
         pub usingnamespace Ext;
 
         pub fn deinit(rx: *Self) void {
             defer rx.* = Self{};
-            lib.allocator.free(rx.sprite.textures);
             rx.sprite.filepaths.deinit();
+            lib.allocator.free(rx.sprite.textures);
             c.SDL_DestroyRenderer(rx.renderer); // Implicitly frees all its textures.
             c.SDL_DestroyWindow(rx.window);
             c.SDL_QuitSubSystem(c.SDL_INIT_VIDEO);
-            sdl.expect(c.SDL_ResetHint(c.SDL_HINT_MAIN_CALLBACK_RATE)) catch unreachable;
+            sdl.expect(c.SDL_ResetHint(c.SDL_HINT_MAIN_CALLBACK_RATE), "") catch unreachable;
         }
 
-        pub fn init() !Self { // TODO add errdefer's
+        pub fn init() !Self {
             {
                 var buf: [lib.digitSizeOf(@TypeOf(lib.game_settings.renderer.fps)) + "\x00".len]u8 = undefined;
                 try sdl.expect(c.SDL_SetHint(
                     c.SDL_HINT_MAIN_CALLBACK_RATE,
                     try fmt.bufPrintZ(&buf, "{}", .{lib.game_settings.renderer.fps}),
-                ));
+                ), "");
             }
-            if (!c.SDL_InitSubSystem(c.SDL_INIT_VIDEO)) {
-                debug.print("couldn't initialize SDL video subsystem: {s}\n", .{c.SDL_GetError()});
-                return error.Sdl;
-            }
-            var window: ?*c.SDL_Window, var renderer: ?*c.SDL_Renderer = .{null} ** 2;
-            if (!c.SDL_CreateWindowAndRenderer(
-                lib.game_settings.game_name.ptr,
-                lib.game_settings.renderer.width,
-                lib.game_settings.renderer.height,
-                0,
-                &window,
-                &renderer,
-            )) {
-                debug.print("couldn't create window/renderer: {s}\n", .{c.SDL_GetError()});
-                return error.Sdl;
-            }
-            var sprite_filepaths = @FieldType(Self, "sprite").Filepaths.init(lib.allocator);
-            try sprite_filepaths.ensureTotalCapacity(@intCast(lib.game_settings.sprites.len));
+            errdefer sdl.expect(c.SDL_ResetHint(c.SDL_HINT_MAIN_CALLBACK_RATE), "") catch unreachable;
+
+            try sdl.expect(c.SDL_InitSubSystem(c.SDL_INIT_VIDEO), "couldn't initialize SDL video subsystem: ");
+            errdefer c.SDL_QuitSubSystem(c.SDL_INIT_VIDEO);
+
+            var maybe_window: ?*c.SDL_Window, var maybe_renderer: ?*c.SDL_Renderer = .{null} ** 2;
+            try sdl.expect(
+                c.SDL_CreateWindowAndRenderer(
+                    lib.game_settings.game_name.ptr,
+                    lib.game_settings.renderer.width,
+                    lib.game_settings.renderer.height,
+                    0,
+                    &maybe_window,
+                    &maybe_renderer,
+                ),
+                "couldn't create window/renderer: ",
+            );
+            const window = maybe_window.?;
+            errdefer c.SDL_DestroyWindow(window);
+            const renderer = maybe_renderer.?;
+            errdefer c.SDL_DestroyRenderer(renderer);
+
+            var sprite: Self.Sprite = undefined;
+
+            sprite.textures = try lib.allocator.alloc(*c.SDL_Texture, lib.game_settings.sprites.len);
+            errdefer lib.allocator.free(sprite.textures);
+
+            sprite.filepaths = Self.Sprite.Filepaths.init(lib.allocator);
+            errdefer sprite.filepaths.deinit();
+
+            try sprite.filepaths.ensureTotalCapacity(@intCast(lib.game_settings.sprites.len));
             for (lib.game_settings.sprites) |sprite_filepath|
-                sprite_filepaths.putAssumeCapacityNoClobber(path.stem(sprite_filepath), sprite_filepath);
+                sprite.filepaths.putAssumeCapacityNoClobber(path.stem(sprite_filepath), sprite_filepath);
+
             return .{
                 .is_inited = true,
-                .window = window.?,
-                .renderer = renderer.?,
-                .sprite = .{
-                    .filepaths = sprite_filepaths,
-                    .textures = try lib.allocator.alloc(
-                        *c.SDL_Texture,
-                        lib.game_settings.sprites.len,
-                    ),
-                },
+                .window = window,
+                .renderer = renderer,
+                .sprite = sprite,
             };
         }
 
@@ -96,6 +106,7 @@ pub fn Renderer(Ext: type) type {
                 return err;
             };
             defer image.deinit();
+
             const texture = try sdl.nonNull(c.SDL_CreateTexture(
                 rx.renderer,
                 c.SDL_PIXELFORMAT_RGBA32,
@@ -108,7 +119,7 @@ pub fn Renderer(Ext: type) type {
                 null,
                 image.pixels.rgba32.ptr,
                 @intCast(image.rowByteSize()),
-            ));
+            ), "");
             return texture;
         }
 
@@ -120,12 +131,13 @@ pub fn Renderer(Ext: type) type {
             const black = c.SDL_Color{ .r = 0x00, .g = 0x00, .b = 0x00 };
             try sdl.expect(
                 c.SDL_SetRenderDrawColor(rx.renderer, black.r, black.g, black.b, c.SDL_ALPHA_OPAQUE),
+                "",
             );
-            try sdl.expect(c.SDL_RenderClear(rx.renderer));
+            try sdl.expect(c.SDL_RenderClear(rx.renderer), "");
         }
 
         pub fn endScene(rx: *const Self) !void {
-            try sdl.expect(c.SDL_RenderPresent(rx.renderer));
+            try sdl.expect(c.SDL_RenderPresent(rx.renderer), "");
         }
 
         pub fn drawBackground(rx: *const Self) !void {
@@ -134,7 +146,7 @@ pub fn Renderer(Ext: type) type {
                 rx.background,
                 null,
                 &.{ .x = 0, .y = 0, .w = @floatFromInt(rx.background.w), .h = @floatFromInt(rx.background.h) },
-            ));
+            ), "");
         }
 
         /// Write text to screen.
