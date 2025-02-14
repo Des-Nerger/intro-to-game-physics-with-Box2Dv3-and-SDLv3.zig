@@ -4,6 +4,7 @@ const c = lib.c;
 const debug = std.debug;
 const lib = @import("lib");
 const mem = std.mem;
+const meta = std.meta;
 const sdl = lib.sdl;
 const std = @import("std");
 const testing = std.testing;
@@ -67,7 +68,7 @@ comptime {
             continue;
         const field = @field(@This(), decl.name);
         if (@TypeOf(field) !=
-            @typeInfo(lib.UnwrapOptional(@field(c, decl.name ++ "_func"))).pointer.child)
+            meta.Child(meta.Child(@field(c, decl.name ++ "_func"))))
         {
             @compileError("pub fn type mismatch: " ++ decl.name);
         }
@@ -180,7 +181,11 @@ pub fn SDL_AppQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
         else
             @hasField(ty_info.pointer.child, "is_inited")) or deinitable.is_inited)
         {
-            debug.print("{}.deinit()\n", .{Deinitable});
+            if (ty_info == .type and deinitable == lib) {
+                debug.print("c.SDL_Quit()\n", .{});
+                c.SDL_Quit(); // we want SDL to clean up all their stuff before we deinit allocator
+            }
+            debug.print("{}.deinit()\n", .{if (ty_info == .type) deinitable else Deinitable});
             deinitable.deinit();
         }
     }
