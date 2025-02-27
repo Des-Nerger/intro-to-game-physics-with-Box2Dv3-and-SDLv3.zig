@@ -12,23 +12,23 @@ const assert = debug.assert;
 const builtin = @import("builtin");
 const c = lib.c;
 const debug = std.debug;
-const lib = @import("lib.zig");
+const lib = @import("../../lib.zig");
 const meta = std.meta;
 const mono = 1;
 const sdl = lib.sdl;
-const simultaneous_max = 2;
+const simultaneous_max = 5;
 const std = @import("std");
 
 inline fn masterSpec() c.SDL_AudioSpec {
     return .{
         .format = c.SDL_AUDIO_S16,
         .channels = Self.mono,
-        .freq = lib.game_settings.sound.rate,
+        .freq = lib.g.settings.sound.rate,
     };
 }
 
 pub fn deinit(sm: *Self) void {
-    defer sm.* = Self{};
+    defer sm.* = .{};
     for (sm.sounds) |*sound| {
         defer sound.* = undefined;
         c.SDL_free(sound.ptr);
@@ -58,12 +58,12 @@ pub fn init() !Self {
     ));
     errdefer c.SDL_DestroyAudioStream(stream);
 
-    const samples_per_frame = @divExact(lib.game_settings.sound.rate, lib.game_settings.renderer.fps);
+    const samples_per_frame = @divExact(lib.g.settings.sound.rate, lib.g.settings.screen.fps);
 
     const buf = try lib.allocator.alloc(Self.Sample, samples_per_frame);
     errdefer lib.allocator.free(buf);
 
-    const sounds = try lib.allocator.alloc([]Self.Sample, lib.game_settings.sounds.len); // + 1 << 55
+    const sounds = try lib.allocator.alloc([]Self.Sample, lib.g.settings.sounds.len); // + 1 << 55
     errdefer lib.allocator.free(sounds);
     @memset(sounds, &.{});
 
@@ -72,7 +72,7 @@ pub fn init() !Self {
         if (sound.len != 0)
             c.SDL_free(sound.ptr);
     };
-    for (sounds, lib.game_settings.sounds) |*sound, sound_filepath| {
+    for (sounds, lib.g.settings.sounds) |*sound, sound_filepath| {
         var spec: c.SDL_AudioSpec = undefined;
         var maybe_audio_buf: ?[*]u8 = undefined;
         var audio_len_in_bytes: u32 = undefined;
@@ -84,7 +84,7 @@ pub fn init() !Self {
             @sizeOf(Self.Sample),
         )];
         for (sound.*) |*sample|
-            sample.* = @intFromFloat(@as(f32, @floatFromInt(sample.*)) * lib.game_settings.sound.volume);
+            sample.* = @intFromFloat(@as(f32, @floatFromInt(sample.*)) * lib.g.settings.sound.volume);
     }
 
     // SDL_OpenAudioDeviceStream starts the device paused. You have to tell it to start!
@@ -94,7 +94,7 @@ pub fn init() !Self {
         .is_inited = true,
         .stream = stream,
         .buf = buf,
-        .playing = .{ &.{}, &.{} },
+        .playing = @splat(&.{}),
         .samples_per_frame = samples_per_frame,
         .sounds = sounds,
     };

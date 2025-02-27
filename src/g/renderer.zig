@@ -2,7 +2,7 @@ const c = lib.c;
 const debug = std.debug;
 const fmt = std.fmt;
 const fs = std.fs;
-const lib = @import("lib.zig");
+const lib = @import("../lib.zig");
 const math = std.math;
 const path = fs.path;
 const sdl = lib.sdl;
@@ -18,21 +18,20 @@ pub fn Renderer(Ext: type) type {
         // We will use this renderer to draw into this window every frame.
         renderer: *c.SDL_Renderer = undefined,
 
-        sprite: Self.Sprite = undefined,
-        background: *c.SDL_Texture = undefined,
-
-        const Self = @This();
-        const Sprite = struct {
+        sprite: struct {
             filepaths: @This().Filepaths,
             textures: []*c.SDL_Texture,
 
             pub const Filepaths = std.StringHashMap([]const u8);
-        };
+        } = undefined,
+        background: *c.SDL_Texture = undefined,
+
+        const Self = @This();
 
         pub usingnamespace Ext;
 
         pub fn deinit(rx: *Self) void {
-            defer rx.* = Self{};
+            defer rx.* = .{};
             rx.sprite.filepaths.deinit();
             lib.allocator.free(rx.sprite.textures);
             c.SDL_DestroyRenderer(rx.renderer); // Implicitly frees all its textures.
@@ -43,10 +42,10 @@ pub fn Renderer(Ext: type) type {
 
         pub fn init() !Self {
             {
-                var buf: [lib.digitSizeOf(@TypeOf(lib.game_settings.renderer.fps)) + "\x00".len]u8 = undefined;
+                var buf: [lib.digitSizeOf(@TypeOf(lib.g.settings.screen.fps)) + "\x00".len]u8 = undefined;
                 try sdl.expect(c.SDL_SetHint(
                     c.SDL_HINT_MAIN_CALLBACK_RATE,
-                    try fmt.bufPrintZ(&buf, "{}", .{lib.game_settings.renderer.fps}),
+                    try fmt.bufPrintZ(&buf, "{}", .{lib.g.settings.screen.fps}),
                 ), "");
             }
             errdefer sdl.expect(c.SDL_ResetHint(c.SDL_HINT_MAIN_CALLBACK_RATE), "") catch unreachable;
@@ -57,9 +56,9 @@ pub fn Renderer(Ext: type) type {
             var maybe_window: ?*c.SDL_Window, var maybe_renderer: ?*c.SDL_Renderer = .{null} ** 2;
             try sdl.expect(
                 c.SDL_CreateWindowAndRenderer(
-                    lib.game_settings.game_name.ptr,
-                    lib.game_settings.renderer.width,
-                    lib.game_settings.renderer.height,
+                    lib.g.settings.game_name.ptr,
+                    @intFromFloat(lib.g.settings.screen.width),
+                    @intFromFloat(lib.g.settings.screen.height),
                     0,
                     &maybe_window,
                     &maybe_renderer,
@@ -71,16 +70,16 @@ pub fn Renderer(Ext: type) type {
             const renderer = maybe_renderer.?;
             errdefer c.SDL_DestroyRenderer(renderer);
 
-            var sprite: Self.Sprite = undefined;
+            var sprite: @FieldType(Self, "sprite") = undefined;
 
-            sprite.textures = try lib.allocator.alloc(*c.SDL_Texture, lib.game_settings.sprites.len);
+            sprite.textures = try lib.allocator.alloc(*c.SDL_Texture, lib.g.settings.sprites.len);
             errdefer lib.allocator.free(sprite.textures);
 
-            sprite.filepaths = Self.Sprite.Filepaths.init(lib.allocator);
+            sprite.filepaths = @TypeOf(sprite).Filepaths.init(lib.allocator);
             errdefer sprite.filepaths.deinit();
 
-            try sprite.filepaths.ensureTotalCapacity(@intCast(lib.game_settings.sprites.len));
-            for (lib.game_settings.sprites) |sprite_filepath|
+            try sprite.filepaths.ensureTotalCapacity(@intCast(lib.g.settings.sprites.len));
+            for (lib.g.settings.sprites) |sprite_filepath|
                 sprite.filepaths.putAssumeCapacityNoClobber(path.stem(sprite_filepath), sprite_filepath);
 
             return .{
@@ -124,7 +123,7 @@ pub fn Renderer(Ext: type) type {
         }
 
         pub fn loadBackground(rx: *Self) !void {
-            rx.background = try rx.loadTexture(lib.game_settings.background);
+            rx.background = try rx.loadTexture(lib.g.settings.background);
         }
 
         pub fn beginScene(rx: *const Self) !void {
@@ -138,6 +137,41 @@ pub fn Renderer(Ext: type) type {
 
         pub fn endScene(rx: *const Self) !void {
             try sdl.expect(c.SDL_RenderPresent(rx.renderer), "");
+        }
+
+        pub fn draw(rx: *const Self, sprite_idx: usize, center: lib.Vec2, maybe_angle: ?f32) !void {
+            const sprite = rx.sprite.textures[sprite_idx];
+            const up_left = lib.Vec2{
+                .x = center.x - @as(f32, @floatFromInt(@divTrunc(sprite.w, 2))),
+                .y = center.y - @as(f32, @floatFromInt(@divTrunc(sprite.h, 2))),
+            };
+            try if (maybe_angle) |angle|
+                sdl.expect(c.SDL_RenderTextureRotated(
+                    rx.renderer,
+                    sprite,
+                    null,
+                    &.{
+                        .x = up_left.x,
+                        .y = up_left.y,
+                        .w = @floatFromInt(sprite.w),
+                        .h = @floatFromInt(sprite.h),
+                    },
+                    math.radiansToDegrees(angle),
+                    null,
+                    c.SDL_FLIP_NONE,
+                ), "")
+            else
+                sdl.expect(c.SDL_RenderTexture(
+                    rx.renderer,
+                    sprite,
+                    null,
+                    &.{
+                        .x = up_left.x,
+                        .y = up_left.y,
+                        .w = @floatFromInt(sprite.w),
+                        .h = @floatFromInt(sprite.h),
+                    },
+                ), "");
         }
 
         pub fn drawBackground(rx: *const Self) !void {

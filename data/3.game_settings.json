@@ -1,17 +1,17 @@
 {
     "game_name": "Pool End Game",
-    "renderer": { "fps": 45, "width": 1024, "height": 531 },
+    "screen": { "fps": 45, "width": 1024, "height": 531 },
 
     "bitmap_font": "images/terminus_u24n_ascii.png",
-    "background": "images/3/pooltable1024x531.png",
+    "background": "images/3/pool_table_1024x531.png",
     "sprites": [
         "images/3/vector_arrow.png",
-        "images/3/cueball.png",
-        "images/3/eightball.png" ],
+        "images/3/cue_ball.png",
+        "images/3/eight_ball.png" ],
 
     "sound": { "rate": 22050, "volume": 0.5 },
     "sounds": [
         "sounds/3/cue.wav",
-        "sounds/3/ballclick.wav",
+        "sounds/3/ball_click.wav",
         "sounds/3/thump.wav",
         "sounds/3/pocket.wav" ]  }

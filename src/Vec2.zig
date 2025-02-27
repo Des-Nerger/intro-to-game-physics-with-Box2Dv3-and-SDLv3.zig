@@ -20,7 +20,7 @@ pub fn add(a: Self, b: Self) Self {
 }
 test add {
     try testing.expectEqual(
-        (Self{ .x = 0.25, .y = 1.50 }).add(Self{ .x = 2.75, .y = 3.00 }),
+        (Self{ .x = 0.25, .y = 1.50 }).add(.{ .x = 2.75, .y = 3.00 }),
         Self{ .x = 3.00, .y = 4.50 },
     );
 }
@@ -64,7 +64,7 @@ pub fn dot(a: Self, b: Self) f32 {
 }
 test dot {
     try testing.expectEqual(
-        (Self{ .x = 1.5, .y = 3.75 }).dot(Self{ .x = -0.5, .y = 4 }),
+        (Self{ .x = 1.5, .y = 3.75 }).dot(.{ .x = -0.5, .y = 4 }),
         14.25,
     );
 }
@@ -131,7 +131,7 @@ pub fn reflect(n: Self, u: Self) Self {
 }
 test reflect {
     try testing.expectEqual(
-        (Self{ .x = 0.0, .y = 1.0 }).reflect(Self{ .x = -4.0, .y = 3.0 }),
+        (Self{ .x = 0.0, .y = 1.0 }).reflect(.{ .x = -4.0, .y = 3.0 }),
         Self{ .x = -4.0, .y = -3.0 },
     );
 }
@@ -153,7 +153,7 @@ pub fn rotate(v: Self, q: lib.Rot) Self {
 }
 test rotate {
     try testing.expectEqual(
-        (Self{ .x = 3.0, .y = 4.0 }).rotate(lib.Rot{ .c = 0.8, .s = 0.6 }),
+        (Self{ .x = 3.0, .y = 4.0 }).rotate(.{ .c = 0.8, .s = 0.6 }),
         Self{ .x = 0.0, .y = 5.0 },
     );
 }
@@ -164,7 +164,7 @@ pub fn sub(a: Self, b: Self) Self {
 }
 test sub {
     try testing.expectEqual(
-        (Self{ .x = 3.25, .y = -4.75 }).sub(Self{ .x = 0.5, .y = -0.25 }),
+        (Self{ .x = 3.25, .y = -4.75 }).sub(.{ .x = 0.5, .y = -0.25 }),
         Self{ .x = 2.75, .y = -4.5 },
     );
 }

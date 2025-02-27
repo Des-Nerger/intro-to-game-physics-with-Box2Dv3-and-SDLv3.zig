@@ -1,5 +1,5 @@
 game_name: [:0]u8,
-renderer: struct { fps: u24, width: u24, height: u24 },
+screen: struct { fps: u24, width: f32, height: f32 },
 bitmap_font: [:0]u8,
 background: [:0]u8,
 sprites: [][:0]u8,

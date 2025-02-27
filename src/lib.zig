@@ -1,7 +1,4 @@
-pub const GameSettings = @import("GameSettings.zig");
-pub const Renderer = @import("renderer.zig").Renderer;
 pub const Rot = @import("Rot.zig");
-pub const SoundManager = @import("SoundManager.zig");
 pub const Vec2 = @import("Vec2.zig");
 /// 0.0023 degrees
 pub const atan_tol = 0.00004;
@@ -17,6 +14,9 @@ pub const sdl = struct {
     var leaked_first_88: []u8 = &.{}; // FIXME
 
     pub fn deinit() void {
+        debug.print("c.SDL_Quit()\n", .{});
+        c.SDL_Quit(); // we want SDL to clean up all their stuff before we deinit allocator
+
         const disabled = struct {
             var fba = heap.FixedBufferAllocator.init(&.{});
             var allocator = @This().fba.allocator();
@@ -26,7 +26,7 @@ pub const sdl = struct {
             "",
         ) catch unreachable;
 
-        // lib.allocator.free(sdl.leaked_first_88); // a hacky way to stop up the leak. FIXME
+        lib.allocator.free(sdl.leaked_first_88); // a hacky way to stop up the leak. FIXME
         sdl.leaked_first_88 = &.{}; // FIXME
     }
 
@@ -166,16 +166,28 @@ test digitSizeOf {
 
 //___________________/ encapsulated \___________________
 pub var is_inited = false;
+pub var dt: f32 = undefined; // in milliseconds
 pub usingnamespace struct {
     pub var allocator: mem.Allocator = undefined;
 };
-pub var game_settings: *const GameSettings = undefined;
+var gpa: heap.GeneralPurposeAllocator(.{}) = undefined; // .{ .safety = false }
+
+pub const g = struct { // -ame
+    pub const Settings = @import("g/Settings.zig");
+    pub const Sound = struct {
+        pub const Manager = @import("g/Sound/Manager.zig");
+    };
+    pub const renderer = @import("g/renderer.zig");
+    pub var settings: *const g.Settings = undefined;
+    var settings_parsed: json.Parsed(g.Settings) = undefined;
+};
 
 pub fn deinit() void {
     is_inited = false;
-    lib.game_settings = undefined;
-    lib.game_settings_parsed.deinit();
-    lib.game_settings_parsed = undefined;
+    lib.dt = undefined;
+    lib.g.settings = undefined;
+    lib.g.settings_parsed.deinit();
+    lib.g.settings_parsed = undefined;
 
     sdl.deinit();
 
@@ -184,7 +196,7 @@ pub fn deinit() void {
     lib.gpa = undefined;
 }
 
-pub fn init(game_settings_filepath: []const u8) !void {
+pub fn init(g_settings_filepath: []const u8) !void {
     lib.gpa = @TypeOf(lib.gpa).init;
     lib.allocator = lib.gpa.allocator();
 
@@ -192,25 +204,27 @@ pub fn init(game_settings_filepath: []const u8) !void {
 
     {
         var json_diagn = json.Diagnostics{};
-        errdefer debug.print("opening '{s}':{}: ", .{ game_settings_filepath, json_diagn.getLine() });
+        errdefer debug.print("opening '{s}':{}: ", .{ g_settings_filepath, json_diagn.getLine() });
 
-        const file = try fs.cwd().openFile(game_settings_filepath, .{});
+        const file = try fs.cwd().openFile(g_settings_filepath, .{});
         defer file.close();
 
         var json_reader = json.reader(lib.allocator, file.reader());
         defer json_reader.deinit();
         json_reader.enableDiagnostics(&json_diagn);
 
-        lib.game_settings_parsed = try json.parseFromTokenSource(
-            GameSettings,
+        lib.g.settings_parsed = try json.parseFromTokenSource(
+            g.Settings,
             lib.allocator,
             &json_reader,
             .{},
         );
-        lib.game_settings = &lib.game_settings_parsed.value;
+        lib.g.settings = &lib.g.settings_parsed.value;
+
+        lib.dt = 1000.0 / @as(f32, @floatFromInt(lib.g.settings.screen.fps));
     }
 
-    if (path.dirname(game_settings_filepath)) |new_cwd| {
+    if (path.dirname(g_settings_filepath)) |new_cwd| {
         posix.chdir(new_cwd) catch |err| {
             debug.print("chdir to '{s}': ", .{new_cwd});
             return err;
@@ -219,9 +233,6 @@ pub fn init(game_settings_filepath: []const u8) !void {
 
     is_inited = true;
 }
-
-var game_settings_parsed: json.Parsed(GameSettings) = undefined;
-var gpa: heap.GeneralPurposeAllocator(.{}) = undefined; // .{ .safety = false }
 //¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯\ encapsulated /¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
 
 const builtin = @import("builtin");
