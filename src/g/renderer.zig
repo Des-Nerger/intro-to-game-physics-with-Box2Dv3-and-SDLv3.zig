@@ -1,3 +1,4 @@
+const assert = debug.assert;
 const c = lib.c;
 const debug = std.debug;
 const fmt = std.fmt;
@@ -24,6 +25,7 @@ pub fn Renderer(Ext: type) type {
 
             pub const Filepaths = std.StringHashMap([]const u8);
         } = undefined,
+        bitmap_font: *c.SDL_Texture = undefined,
         background: *c.SDL_Texture = undefined,
 
         const Self = @This();
@@ -82,12 +84,15 @@ pub fn Renderer(Ext: type) type {
             for (lib.g.settings.sprites) |sprite_filepath|
                 sprite.filepaths.putAssumeCapacityNoClobber(path.stem(sprite_filepath), sprite_filepath);
 
-            return .{
+            var rx = Self{
                 .is_inited = true,
                 .window = window,
                 .renderer = renderer,
                 .sprite = sprite,
             };
+            rx.bitmap_font = try rx.loadTexture(lib.g.settings.bitmap_font);
+            try sdl.expect(c.SDL_SetTextureScaleMode(rx.bitmap_font, c.SDL_SCALEMODE_NEAREST), "");
+            return rx;
         }
 
         pub fn load(rx: *Self, sprite_idx: usize, sprite_name: [:0]const u8) !void {
@@ -184,11 +189,42 @@ pub fn Renderer(Ext: type) type {
         }
 
         /// Write text to screen.
-        pub fn textWrite(rx: *const Self, text: []const u8, maybe_color: ?c.SDL_Color) void {
-            const max = math.maxInt(u8);
-            const color: c.SDL_Color =
-                if (maybe_color) |color| color else .{ .r = max, .g = max, .b = max, .a = max };
-            _ = .{ rx, text, color };
+        pub fn textWrite(rx: *const Self, text: []const u8, maybe_color: ?c.SDL_Color) !void {
+            assert(null == maybe_color);
+            // const max = math.maxInt(u8);
+            // const color: c.SDL_Color =
+            //     if (maybe_color) |color| color else .{ .r = max, .g = max, .b = max, .a = max };
+            const font = .{ .width = 12, .height = 24 };
+            const scale = 4;
+            var dst = lib.Vec2{
+                .x = lib.g.settings.screen.width / 2 -
+                    @as(f32, @floatFromInt(text.len)) * scale * font.width / 2,
+                .y = lib.g.settings.screen.height / 2 - scale * font.height / 2,
+            };
+            for (text) |ascii_ch| {
+                const space_based_idx = ascii_ch - ' ';
+                const src = lib.Vec2{
+                    .x = @as(f32, @floatFromInt(space_based_idx % 16)) * font.width,
+                    .y = @as(f32, @floatFromInt(space_based_idx / 16)) * font.height,
+                };
+                try sdl.expect(c.SDL_RenderTexture(
+                    rx.renderer,
+                    rx.bitmap_font,
+                    &.{
+                        .x = src.x,
+                        .y = src.y,
+                        .w = font.width,
+                        .h = font.height,
+                    },
+                    &.{
+                        .x = dst.x,
+                        .y = dst.y,
+                        .w = scale * font.width,
+                        .h = scale * font.height,
+                    },
+                ), "");
+                dst.x += scale * font.width;
+            }
         }
     };
 }

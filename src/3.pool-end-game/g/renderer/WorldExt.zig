@@ -13,10 +13,10 @@ pub fn loadImages(rw: *Self) !void {
 
 /// Tell the player whether they've won or lost by plastering a text banner across the screen.
 /// \param state The game state, which tells whether the player has won or lost.
-pub fn maybeDrawWinLoseMessage(rw: *const Self, game_state: g.State) void {
+pub fn maybeDrawWinLoseMessage(rw: *const Self, game_state: g.State) !void {
     switch (game_state) {
-        .won => rw.textWrite("You Win!", null),
-        .lost => rw.textWrite("Loser!", null),
+        .won => try rw.textWrite("You Win!", null),
+        .lost => try rw.textWrite("Loser!", null),
         else => {},
     }
 }

@@ -59,7 +59,7 @@ pub const g = struct { // -ame or -lobals
         try g.renderer.world.beginScene(); // start up graphics pipeline
         try g.renderer.world.drawBackground(); // draw the background
         try g.Object.world.draw(); // draw the objects
-        g.renderer.world.maybeDrawWinLoseMessage(g.state);
+        try g.renderer.world.maybeDrawWinLoseMessage(g.state);
         try g.renderer.world.endScene(); // shut down graphics pipeline
     }
 };
