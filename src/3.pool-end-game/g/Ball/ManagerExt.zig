@@ -23,7 +23,7 @@ pub fn collisionResponseAt(bm: *Self, i: usize) void {
     // Compare against only higher-indexed objects to avoid processing each collision twice.
     for (i + 1..bm.objects.len) |j| {
         b[1] = &bm.objects[j];
-        if (!b[1].can_collide) continue;
+        if (b[1].is_in_pocket) continue;
         const distance = (b[0].diameter + b[1].diameter) / 2.0;
         if (b[0].obj.pos.sub(b[1].obj.pos).lengthSquared() < distance * distance and
             !(b[0].obj.isAtRest() and b[1].obj.isAtRest()))

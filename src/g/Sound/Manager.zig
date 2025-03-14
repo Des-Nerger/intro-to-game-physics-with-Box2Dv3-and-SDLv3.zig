@@ -16,7 +16,7 @@ const lib = @import("../../lib.zig");
 const meta = std.meta;
 const mono = 1;
 const sdl = lib.sdl;
-const simultaneous_max = 5;
+const simultaneous_max = 6;
 const std = @import("std");
 
 inline fn masterSpec() c.SDL_AudioSpec {

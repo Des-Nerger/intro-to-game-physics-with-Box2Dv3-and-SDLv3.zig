@@ -3,7 +3,6 @@ obj: g.Object = undefined,
 
 diameter: f32 = undefined,
 is_in_pocket: bool,
-can_collide: bool = undefined,
 
 pub const ManagerExt = @import("Ball/ManagerExt.zig");
 
@@ -29,7 +28,7 @@ pub fn init(obj_type: g.Object.Type, pos: lib.Vec2) Self {
 //     const c_dot_vhat = c.dot(vhat);
 //
 //     const @"δ" = (b0.diameter + b.diameter) / 2.0;
-//     const discrim = c_dot_vhat * c_dot_vhat - c.dot(c) + @"δ" * @"δ";
+//     const discrim = c_dot_vhat * c_dot_vhat - c.lengthSquared() + @"δ" * @"δ";
 //     if (discrim < 0.0) return false;
 //     const d = -c_dot_vhat + @sqrt(discrim);
 //
@@ -44,27 +43,22 @@ pub fn init(obj_type: g.Object.Type, pos: lib.Vec2) Self {
 // }
 
 pub fn bounceWithMoving(b1: *Self, b2: *Self) bool {
-    const v1len, var v1hat = b1.obj.velocity.getLengthAndNormalize();
-    const v2len, var v2hat = b2.obj.velocity.getLengthAndNormalize();
-    _ = v1len / v2len; // -rs
-
-    const vhat = b1.obj.velocity.sub(b2.obj.velocity).normalize();
+    const vlen, const vhat = b1.obj.velocity.sub(b2.obj.velocity).getLengthAndNormalize();
 
     const c = b2.obj.pos.sub(b1.obj.pos);
     const c_dot_vhat = c.dot(vhat);
 
     const @"δ" = (b1.diameter + b2.diameter) / 2.0;
-    const s = c_dot_vhat * c_dot_vhat - c.lengthSquared() + @"δ" * @"δ";
-    const d = if (s >= 0.0) -c_dot_vhat + @sqrt(s) else return false;
+    const discrim = c_dot_vhat * c_dot_vhat - c.lengthSquared() + @"δ" * @"δ";
+    const duration_of_impact = (if (discrim >= 0.0) -c_dot_vhat + @sqrt(discrim) else return false) / vlen;
 
-    b1.obj.pos = b1.obj.pos.sub(v1hat.mulSc(d));
-    b2.obj.pos = b2.obj.pos.sub(v1hat.add(v2hat).mulSc(d));
+    b1.obj.pos = b1.obj.pos.sub(b1.obj.velocity.mulSc(duration_of_impact));
+    b2.obj.pos = b2.obj.pos.sub(b2.obj.velocity.mulSc(duration_of_impact));
 
     b1.obj.velocity, b2.obj.velocity = c.normalize().reflect2(b1.obj.velocity, b2.obj.velocity);
 
-    v1hat, v2hat = .{ b1.obj.velocity.normalize(), b2.obj.velocity.normalize() };
-    b1.obj.pos = b1.obj.pos.add(v1hat.mulSc(d));
-    b2.obj.pos = b2.obj.pos.add(v2hat.mulSc(d));
+    b1.obj.pos = b1.obj.pos.add(b1.obj.velocity.mulSc(duration_of_impact));
+    b2.obj.pos = b2.obj.pos.add(b2.obj.velocity.mulSc(duration_of_impact));
 
     return true;
 }

@@ -136,6 +136,7 @@ test reflect {
     );
 }
 
+/// The "sign" of `n` doesn't matter: both `(-n).reflect` and `n.reflect` give the same result.
 pub inline fn reflect2(n: Self, u: Self, v: Self) [2]Self {
     const m = u.sub(v).dot(n);
     const mn = n.mulSc(m);

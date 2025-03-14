@@ -15,10 +15,10 @@ test "parse and stringify back" {
     const input_slice =
         \\{
         \\    "game_name": "Game",
-        \\    "renderer": {
+        \\    "screen": {
         \\        "fps": 120,
-        \\        "width": 720,
-        \\        "height": 480
+        \\        "width": 7.2e2,
+        \\        "height": 4.8e2
         \\    },
         \\    "bitmap_font": "images/bitmap_font_u13n_ascii.png",
         \\    "background": "images/background.png",
