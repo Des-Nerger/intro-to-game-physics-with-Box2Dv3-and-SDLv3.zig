@@ -144,24 +144,31 @@ pub fn Renderer(Ext: type) type {
             try sdl.expect(c.SDL_RenderPresent(rx.renderer), "");
         }
 
-        pub fn draw(rx: *const Self, sprite_idx: usize, center: lib.Vec2, maybe_angle: ?f32) !void {
+        pub fn draw(
+            rx: *const Self,
+            sprite_idx: usize,
+            center: lib.Vec2,
+            maybe_rot: ?lib.Rot,
+            maybe_scale: ?lib.Vec2,
+        ) !void {
             const sprite = rx.sprite.textures[sprite_idx];
-            const up_left = lib.Vec2{
-                .x = center.x - @as(f32, @floatFromInt(@divTrunc(sprite.w, 2))),
-                .y = center.y - @as(f32, @floatFromInt(@divTrunc(sprite.h, 2))),
+            var dest_rect = c.SDL_FRect{
+                .w = @floatFromInt(sprite.w),
+                .h = @floatFromInt(sprite.h),
             };
-            try if (maybe_angle) |angle|
+            if (maybe_scale) |scale| {
+                dest_rect.w *= scale.x;
+                dest_rect.h *= scale.y;
+            }
+            dest_rect.x = center.x - dest_rect.w / 2.0;
+            dest_rect.y = center.y - dest_rect.h / 2.0;
+            try if (maybe_rot) |rot|
                 sdl.expect(c.SDL_RenderTextureRotated(
                     rx.renderer,
                     sprite,
                     null,
-                    &.{
-                        .x = up_left.x,
-                        .y = up_left.y,
-                        .w = @floatFromInt(sprite.w),
-                        .h = @floatFromInt(sprite.h),
-                    },
-                    math.radiansToDegrees(angle),
+                    &dest_rect,
+                    math.radiansToDegrees(-rot.toRadians()), // SDL requires clockwise direction, hence minus.
                     null,
                     c.SDL_FLIP_NONE,
                 ), "")
@@ -170,12 +177,7 @@ pub fn Renderer(Ext: type) type {
                     rx.renderer,
                     sprite,
                     null,
-                    &.{
-                        .x = up_left.x,
-                        .y = up_left.y,
-                        .w = @floatFromInt(sprite.w),
-                        .h = @floatFromInt(sprite.h),
-                    },
+                    &dest_rect,
                 ), "");
         }
 

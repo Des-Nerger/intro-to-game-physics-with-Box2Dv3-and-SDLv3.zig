@@ -72,7 +72,7 @@ pub fn build(b: *std.Build) void {
 
     // -------------------------[ Executables ]-------------------------
 
-    inline for (.{"3.pool-end-game"}) |app_name| {
+    inline for (.{ "3.pool-end-game", "4.ball-and-spring-toy" }) |app_name| {
         // We will also create a module for our other entry point, 'main.zig'.
         const exe_mod = b.createModule(.{
             // `root_source_file` is the Zig "entry point" of the module. If a module

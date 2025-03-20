@@ -1,8 +1,6 @@
 const c = lib.c;
 const debug = std.debug;
 const lib = @import("lib");
-const mem = std.mem;
-const meta = std.meta;
 const sdl = lib.sdl;
 const std = @import("std");
 const testing = std.testing;
@@ -65,17 +63,7 @@ pub const g = struct { // -ame or -lobals
 };
 
 comptime {
-    for (@typeInfo(@This()).@"struct".decls) |decl| {
-        if (!mem.startsWith(u8, decl.name, "SDL_App"))
-            continue;
-        const field = @field(@This(), decl.name);
-        if (@TypeOf(field) !=
-            meta.Child(meta.Child(@field(c, decl.name ++ "_func"))))
-        {
-            @compileError("pub fn type mismatch: " ++ decl.name);
-        }
-        @export(&field, .{ .name = decl.name, .linkage = .strong });
-    }
+    sdl.app.@"export"(@This());
 }
 
 /// Initialize and start the game.
@@ -83,15 +71,15 @@ comptime {
 pub fn SDL_AppInit(_: [*c]?*anyopaque, argc: c_int, argv: [*c][*c]u8) callconv(.c) c.SDL_AppResult {
     _ = .{ argc, argv };
 
-    lib.init("data/3.game_settings.json") catch |err| return sdl.appFailure(err);
-    g.Sound.manager = lib.g.Sound.Manager.init() catch |err| return sdl.appFailure(err);
+    lib.init("data/3.game_settings.json") catch |err| return sdl.app.failure(err);
+    g.Sound.manager = lib.g.Sound.Manager.init() catch |err| return sdl.app.failure(err);
 
     // set up Render World
     g.renderer.world = @TypeOf(g.renderer.world).init() catch |err|
-        return sdl.appFailure(err); // bails if fails
-    g.renderer.world.loadImages() catch |err| return sdl.appFailure(err); // load images from .json file list
+        return sdl.app.failure(err); // bails if fails
+    g.renderer.world.loadImages() catch |err| return sdl.app.failure(err); // load images from .json file list
 
-    g.begin() catch |err| return sdl.appFailure(err); // now start the game
+    g.begin() catch |err| return sdl.app.failure(err); // now start the game
 
     return c.SDL_APP_CONTINUE; // carry on with the program!
 }
@@ -99,7 +87,7 @@ pub fn SDL_AppInit(_: [*c]?*anyopaque, argc: c_int, argv: [*c][*c]u8) callconv(.
 /// This function runs when a new event (mouse input, keypresses, etc) occurs.
 pub fn SDL_AppEvent(_: ?*anyopaque, event: [*c]c.SDL_Event) callconv(.c) c.SDL_AppResult {
     const move_delta = 5.0; // small change in position.
-    const angle_delta = 0.01; // small change in angle.
+    const rot_delta = comptime lib.Rot.fromRadians(0.01); // small change in angle.
 
     switch (event.*.type) {
         c.SDL_EVENT_QUIT => return c.SDL_APP_SUCCESS, // end the program, reporting success to the OS.
@@ -114,16 +102,16 @@ pub fn SDL_AppEvent(_: ?*anyopaque, event: [*c]c.SDL_Event) callconv(.c) c.SDL_A
                 g.Object.world.resetImpulseVector();
             },
             c.SDL_SCANCODE_LEFT => switch (g.state) {
-                .setting_upshot, .initial => g.Object.world.adjustImpulseVector(angle_delta),
+                .setting_upshot, .initial => g.Object.world.adjustImpulseVector(rot_delta),
                 else => {},
             },
             c.SDL_SCANCODE_RIGHT => switch (g.state) {
-                .setting_upshot, .initial => g.Object.world.adjustImpulseVector(-angle_delta),
+                .setting_upshot, .initial => g.Object.world.adjustImpulseVector(rot_delta.angleNeg()),
                 else => {},
             },
             c.SDL_SCANCODE_Z => switch (g.state) {
                 .won, .lost => if (g.Object.world.allBallsStopped()) g.begin() catch |err|
-                    return sdl.appFailure(err),
+                    return sdl.app.failure(err),
                 .setting_upshot, .initial => {
                     g.state = .balls_moving;
                     g.Object.world.shoot();
@@ -143,9 +131,9 @@ pub fn SDL_AppEvent(_: ?*anyopaque, event: [*c]c.SDL_Event) callconv(.c) c.SDL_A
 /// Takes appropriate action if the player has won or lost.
 pub fn SDL_AppIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
     // stuff that gets done on every frame
-    g.Sound.manager.beginFrame() catch |err| return sdl.appFailure(err); // no double sounds
+    g.Sound.manager.beginFrame() catch |err| return sdl.app.failure(err);
     g.Object.world.move(); // move all objects
-    g.renderFrame() catch |err| return sdl.appFailure(err); // render a frame of animation
+    g.renderFrame() catch |err| return sdl.app.failure(err); // render a frame of animation
 
     // change game state to set up next shot, if necessary
     if (g.Object.world.cueBallDown())

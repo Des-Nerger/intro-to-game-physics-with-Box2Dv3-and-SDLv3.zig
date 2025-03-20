@@ -4,7 +4,7 @@ const g = @import("../../sdl_app.zig").g;
 pub fn draw(bm: *Self) !void {
     for (&bm.objects) |b|
         if (!b.is_in_pocket)
-            try g.renderer.world.draw(@intFromEnum(b.obj.type), b.obj.pos, null);
+            try g.renderer.world.draw(@intFromEnum(b.obj.type), b.obj.pos, null, null);
 }
 
 /// Collision detection and response.

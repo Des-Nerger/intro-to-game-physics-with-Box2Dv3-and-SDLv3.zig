@@ -1,0 +1,17 @@
+{
+    "game_name": "Ball and Spring Toy",
+    "screen": { "fps": 45, "width": 1024, "height": 768 },
+
+    "bitmap_font": "images/terminus_u24n_ascii.png",
+    "background": "images/background.png",
+    "sprites": [
+        "images/4/ball_bearing.png",
+        "images/4/wood_circle.png",
+        "images/4/spring.png",
+        "images/4/beam_stick.png" ],
+
+    "sound": { "rate": 22050, "volume": 0.5 },
+    "sounds": [
+        "sounds/4/thump.wav",
+        "sounds/4/boing.wav",
+        "sounds/4/ow.wav" ]  }

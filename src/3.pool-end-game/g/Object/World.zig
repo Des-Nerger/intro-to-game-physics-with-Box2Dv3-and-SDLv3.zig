@@ -1,6 +1,6 @@
 ball_manager: g.Object.manager.Manager(g.Ball, 2, g.Ball.ManagerExt),
 cue: struct {
-    impulse_angle: f32,
+    impulse_rot: lib.Rot,
     is_to_draw_impulse_vector: bool,
     ball: *g.Ball,
 },
@@ -14,7 +14,7 @@ pub fn init() Self {
     return .{
         .ball_manager = .{},
         .cue = .{
-            .impulse_angle = 0.0,
+            .impulse_rot = lib.Rot.identity,
             .is_to_draw_impulse_vector = true,
             .ball = undefined,
         },
@@ -46,12 +46,11 @@ pub fn draw(ow: *Self) !void {
         try g.renderer.world.draw(
             @intFromEnum(g.Object.Type.vector_arrow),
             ow.cue.ball.obj.pos,
-            ow.cue.impulse_angle,
+            ow.cue.impulse_rot,
+            null,
         );
     try ow.ball_manager.draw();
 }
-
-// g_cRenderWorld.draw(ARROW_OBJECT, p.x, p.y, m_fCueBallImpulseAngle);
 
 /// Move all objects.
 pub fn move(ow: *Self) void {
@@ -63,12 +62,12 @@ pub fn move(ow: *Self) void {
 /// to the center of the eight-ball.
 pub fn resetImpulseVector(ow: *Self) void {
     ow.cue.is_to_draw_impulse_vector = true;
-    const cue_to_eight = ow.eight_ball.obj.pos.sub(ow.cue.ball.obj.pos);
-    ow.cue.impulse_angle = lib.atan2(cue_to_eight.y, cue_to_eight.x);
+    const cue_to_eight = ow.eight_ball.obj.pos.sub(ow.cue.ball.obj.pos).normalize();
+    ow.cue.impulse_rot = lib.Rot{ .c = cue_to_eight.x, .s = cue_to_eight.y };
 }
 
-pub fn adjustImpulseVector(ow: *Self, angle_delta: f32) void {
-    ow.cue.impulse_angle += angle_delta;
+pub fn adjustImpulseVector(ow: *Self, rot_delta: lib.Rot) void {
+    ow.cue.impulse_rot = ow.cue.impulse_rot.mul(rot_delta);
 }
 
 /// Adjust the cue ball up or down.
@@ -81,7 +80,7 @@ pub fn adjustCueBall(ow: *Self, dy: f32) void {
 /// Shoot the cue ball.
 pub fn shoot(ow: *Self) void {
     ow.cue.is_to_draw_impulse_vector = false;
-    ow.cue.ball.deliverImpulse(ow.cue.impulse_angle, 40.0);
+    ow.cue.ball.deliverImpulse(ow.cue.impulse_rot, 40.0);
 }
 
 /// Check whether the cue-ball or the eight-ball is in a pocket.

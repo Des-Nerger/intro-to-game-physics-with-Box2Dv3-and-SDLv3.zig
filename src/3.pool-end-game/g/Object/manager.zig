@@ -1,6 +1,6 @@
-pub fn Manager(ObjectExt: type, comptime max_objects: usize, ManagerExt: type) type {
+pub fn Manager(ObjectExt: type, comptime objects_max: usize, ManagerExt: type) type {
     return struct {
-        objects: [max_objects]ObjectExt = [_]ObjectExt{.{ .is_in_pocket = true }} ** max_objects,
+        objects: [objects_max]ObjectExt = [_]ObjectExt{.{ .is_in_pocket = true }} ** objects_max,
 
         const Self = @This();
 

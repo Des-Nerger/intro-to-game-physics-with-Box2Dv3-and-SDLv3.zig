@@ -154,9 +154,9 @@ pub fn setVelocity(b: *Self, velocity: lib.Vec2) void {
     b.obj.is_at_rest, b.obj.velocity = .{ false, velocity };
 }
 
-/// Deliver an impulse to the object, given the angle and magnitude.
-/// \param angle Angle at which the impulse is to be applied.
+/// Deliver an impulse to the object, given the rotation and magnitude.
+/// \param rot_delta Rotation at which the impulse is to be applied.
 /// \param magnitude Magnitude of the impulse to apply.
-pub fn deliverImpulse(b: *Self, angle: f32, magnitude: f32) void {
-    b.obj.velocity = (lib.Vec2{ .x = @cos(angle), .y = @sin(angle) }).mulSc(magnitude);
+pub fn deliverImpulse(b: *Self, rot_delta: lib.Rot, magnitude: f32) void {
+    b.obj.velocity = (lib.Vec2{ .x = rot_delta.c, .y = rot_delta.s }).mulSc(magnitude);
 }

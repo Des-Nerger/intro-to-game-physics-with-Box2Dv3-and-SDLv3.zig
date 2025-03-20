@@ -76,14 +76,30 @@ pub const sdl = struct {
         return .{ Allocator.malloc, Allocator.calloc, Allocator.realloc, Allocator.free };
     }
 
-    pub fn appFailure(err: anyerror) c.SDL_AppResult {
-        const trace = @errorReturnTrace();
-        if (err == error.Sdl)
-            debug.print("{?}\n", .{trace})
-        else
-            debug.print("{}\n{?}\n", .{ err, trace });
-        return c.SDL_APP_FAILURE;
-    }
+    pub const app = struct {
+        pub fn @"export"(SdlAppNamespace: type) void {
+            for (@typeInfo(SdlAppNamespace).@"struct".decls) |decl| {
+                if (!mem.startsWith(u8, decl.name, "SDL_App"))
+                    continue;
+                const field = @field(SdlAppNamespace, decl.name);
+                if (@TypeOf(field) !=
+                    meta.Child(meta.Child(@field(c, decl.name ++ "_func"))))
+                {
+                    @compileError("pub fn type mismatch: " ++ decl.name);
+                }
+                @export(&field, .{ .name = decl.name, .linkage = .strong });
+            }
+        }
+
+        pub fn failure(err: anyerror) c.SDL_AppResult {
+            const trace = @errorReturnTrace();
+            if (err == error.Sdl)
+                debug.print("{?}\n", .{trace})
+            else
+                debug.print("{}\n{?}\n", .{ err, trace });
+            return c.SDL_APP_FAILURE;
+        }
+    };
 
     fn NonNull(Parent: anytype) type {
         const ty_info = @typeInfo(Parent);
@@ -243,6 +259,7 @@ const json = std.json;
 const lib = @This();
 const math = std.math;
 const mem = std.mem;
+const meta = std.meta;
 const path = fs.path;
 const posix = std.posix;
 const std = @import("std");
