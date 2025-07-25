@@ -15,6 +15,7 @@ pub const main = c.main;
 
 pub const g = struct {
     pub const Particle = @import("g/Particle.zig");
+    pub const Spring = @import("g/Spring.zig");
 
     /// These are the sounds used in actual gameplay. Sounds must be listed here in
     /// the same order that they are in the sound settings JSON file.
@@ -31,7 +32,7 @@ pub const g = struct {
         chain2,
         chain3,
         chain4,
-        tringle,
+        triangle,
         square,
         wheel5,
         wheel6,

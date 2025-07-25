@@ -4,7 +4,7 @@ obj: g.Object = undefined,
 diameter: f32 = undefined,
 is_in_pocket: bool,
 
-pub const ManagerExt = @import("Ball/ManagerExt.zig");
+pub const Manager = g.Object.manager.Manager(g.Ball, 2, @import("Ball/ManagerMixin.zig"));
 
 const Self = @This();
 const g = @import("../sdl_app.zig").g;

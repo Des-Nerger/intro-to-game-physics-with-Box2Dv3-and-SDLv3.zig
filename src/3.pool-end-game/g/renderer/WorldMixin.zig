@@ -1,9 +1,10 @@
-const Self = lib.g.renderer.Renderer(@This());
+const Self = @This();
 const g = @import("../../sdl_app.zig").g;
 const lib = @import("lib");
 
 /// Load game images. Gets file list from `*.game_settings.json`.
-pub fn loadImages(rw: *Self) !void {
+pub fn loadImages(wm: *Self) !void {
+    const rw: *g.RendererWorld = @alignCast(@fieldParentPtr("world", wm));
     try rw.loadBackground();
 
     // Load sprite for each object
@@ -13,7 +14,8 @@ pub fn loadImages(rw: *Self) !void {
 
 /// Tell the player whether they've won or lost by plastering a text banner across the screen.
 /// \param state The game state, which tells whether the player has won or lost.
-pub fn maybeDrawWinLoseMessage(rw: *const Self, game_state: g.State) !void {
+pub fn maybeDrawWinLoseMessage(wm: *const Self, game_state: g.State) !void {
+    const rw: *const g.RendererWorld = @alignCast(@fieldParentPtr("world", wm));
     switch (game_state) {
         .won => try rw.textWrite("You Win!", null),
         .lost => try rw.textWrite("Loser!", null),

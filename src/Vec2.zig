@@ -72,12 +72,12 @@ test dot {
 /// Convert a vector into a unit vector if possible, otherwise returns the zero vector. Also
 /// outputs the length.
 pub fn getLengthAndNormalize(v: Self) struct { f32, Self } {
-    const length = v.length();
-    if (length < math.floatEps(f32))
-        return .{ length, Self.zero };
+    const len = v.length();
+    if (len < math.floatEps(f32))
+        return .{ len, Self.zero };
 
-    const inv_len = 1.0 / length;
-    return .{ length, Self{ .x = inv_len * v.x, .y = inv_len * v.y } };
+    const inv_len = 1.0 / len;
+    return .{ len, Self{ .x = inv_len * v.x, .y = inv_len * v.y } };
 }
 test getLengthAndNormalize {
     try testing.expectEqual(
@@ -86,15 +86,13 @@ test getLengthAndNormalize {
     );
 }
 
-pub usingnamespace struct {
-    /// Get the length of this vector (the norm)
-    pub fn length(v: Self) f32 {
-        return @sqrt(v.lengthSquared());
-    }
-    test length {
-        try testing.expectEqual((Self{ .x = 3.0, .y = 4.0 }).length(), 5.0);
-    }
-};
+/// Get the length of this vector (the norm)
+pub fn length(v: Self) f32 {
+    return @sqrt(v.lengthSquared());
+}
+test length {
+    try testing.expectEqual((Self{ .x = 3.0, .y = 4.0 }).length(), 5.0);
+}
 
 /// Get the length squared of this vector
 pub fn lengthSquared(v: Self) f32 {

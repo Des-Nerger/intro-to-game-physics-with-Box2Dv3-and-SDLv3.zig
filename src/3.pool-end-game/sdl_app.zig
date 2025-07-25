@@ -16,10 +16,8 @@ pub const main = c.main;
 pub const g = struct { // -ame or -lobals
     pub const Ball = @import("g/Ball.zig");
     pub const Object = @import("g/Object.zig");
-    pub const renderer = struct {
-        const WorldExt = @import("g/renderer/WorldExt.zig");
-        pub var world = lib.g.renderer.Renderer(@This().WorldExt){};
-    };
+    pub const RendererWorld = lib.g.renderer.Renderer(@import("g/renderer/WorldMixin.zig"));
+    pub var renderer = g.RendererWorld{};
 
     /// These are the sounds used in actual gameplay. Sounds must be listed here in
     /// the same order that they are in the sound settings JSON file.
@@ -54,11 +52,11 @@ pub const g = struct { // -ame or -lobals
 
     /// Render a frame of animation.
     fn renderFrame() !void {
-        try g.renderer.world.beginScene(); // start up graphics pipeline
-        try g.renderer.world.drawBackground(); // draw the background
+        try g.renderer.beginScene(); // start up graphics pipeline
+        try g.renderer.drawBackground(); // draw the background
         try g.Object.world.draw(); // draw the objects
         try g.renderer.world.maybeDrawWinLoseMessage(g.state);
-        try g.renderer.world.endScene(); // shut down graphics pipeline
+        try g.renderer.endScene(); // shut down graphics pipeline
     }
 };
 
@@ -75,7 +73,7 @@ pub fn SDL_AppInit(_: [*c]?*anyopaque, argc: c_int, argv: [*c][*c]u8) callconv(.
     g.Sound.manager = lib.g.Sound.Manager.init() catch |err| return sdl.app.failure(err);
 
     // set up Render World
-    g.renderer.world = @TypeOf(g.renderer.world).init() catch |err|
+    g.renderer = @TypeOf(g.renderer).init() catch |err|
         return sdl.app.failure(err); // bails if fails
     g.renderer.world.loadImages() catch |err| return sdl.app.failure(err); // load images from .json file list
 
@@ -156,7 +154,7 @@ pub fn SDL_AppIterate(_: ?*anyopaque) callconv(.c) c.SDL_AppResult {
 pub fn SDL_AppQuit(_: ?*anyopaque, result: c.SDL_AppResult) callconv(.c) void {
     _ = .{result};
 
-    inline for (.{ &g.renderer.world, &g.Sound.manager, lib }) |deinitable| {
+    inline for (.{ &g.renderer, &g.Sound.manager, lib }) |deinitable| {
         const Deinitable = @TypeOf(deinitable);
         const ty_info = @typeInfo(Deinitable);
         if (!(if (ty_info == .type)

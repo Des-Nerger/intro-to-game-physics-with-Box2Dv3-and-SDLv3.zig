@@ -1,4 +1,4 @@
-ball_manager: g.Object.manager.Manager(g.Ball, 2, g.Ball.ManagerExt),
+manager: g.Ball.Manager,
 cue: struct {
     impulse_rot: lib.Rot,
     is_to_draw_impulse_vector: bool,
@@ -12,7 +12,7 @@ const lib = @import("lib");
 
 pub fn init() Self {
     return .{
-        .ball_manager = .{},
+        .manager = .{},
         .cue = .{
             .impulse_rot = lib.Rot.identity,
             .is_to_draw_impulse_vector = true,
@@ -31,31 +31,31 @@ pub fn create(ow: *Self, obj_type: g.Object.Type, pos: lib.Vec2) void {
         .cue_ball => &ow.cue.ball,
         .eight_ball => &ow.eight_ball,
         else => return,
-    }).* = ow.ball_manager.create(.{ obj_type, pos });
+    }).* = ow.manager.create(.{ obj_type, pos });
 }
 
 /// Clear objects, reset to initial conditions.
 pub fn clear(ow: *Self) void {
-    ow.ball_manager.clear();
+    ow.manager.clear();
 }
 
 /// Draw everything in the Object World.
 /// Draw the impulse vector, then the game objects.
 pub fn draw(ow: *Self) !void {
     if (ow.cue.is_to_draw_impulse_vector)
-        try g.renderer.world.draw(
+        try g.renderer.draw(
             @intFromEnum(g.Object.Type.vector_arrow),
             ow.cue.ball.obj.pos,
             ow.cue.impulse_rot,
             null,
         );
-    try ow.ball_manager.draw();
+    try ow.manager.ball_methods.draw();
 }
 
 /// Move all objects.
 pub fn move(ow: *Self) void {
-    ow.ball_manager.move();
-    ow.ball_manager.collisionResponse();
+    ow.manager.move();
+    ow.manager.ball_methods.collisionResponse();
 }
 
 /// Make the impulse vector point from the center of the cue-ball

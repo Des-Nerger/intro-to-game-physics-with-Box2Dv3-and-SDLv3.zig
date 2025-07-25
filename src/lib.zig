@@ -4,12 +4,16 @@ pub const Vec2 = @import("Vec2.zig");
 pub const atan_tol = 0.00004;
 pub const c = @cImport({
     if (builtin.is_test)
-        @cDefine("main", "SDL_main")
+        @cDefine(
+            "main(ARGC, ARGV)",
+            "SDL_EnterAppMainCallbacks(ARGC, ARGV, NULL, NULL, NULL, NULL)",
+        )
     else
         @cDefine("SDL_MAIN_USE_CALLBACKS", {}); // use the callbacks instead of main()
     @cInclude("SDL3/SDL.h");
     @cInclude("SDL3/SDL_main.h");
 });
+
 pub const sdl = struct {
     var leaked_first_88: []u8 = &.{}; // FIXME
 
@@ -30,11 +34,11 @@ pub const sdl = struct {
         sdl.leaked_first_88 = &.{}; // FIXME
     }
 
-    pub fn init(comptime allocator: *const mem.Allocator) !void {
-        try sdl.expect(@call(.auto, c.SDL_SetMemoryFunctions, sdl.memFns(allocator)), "");
+    pub fn init(comptime allocator_ptr: *const mem.Allocator) !void {
+        try sdl.expect(@call(.auto, c.SDL_SetMemoryFunctions, sdl.memFns(allocator_ptr)), "");
     }
 
-    pub fn memFns(comptime allocator: *const mem.Allocator) struct {
+    pub fn memFns(comptime allocator_ptr: *const mem.Allocator) struct {
         c.SDL_malloc_func,
         c.SDL_calloc_func,
         c.SDL_realloc_func,
@@ -42,14 +46,14 @@ pub const sdl = struct {
     } {
         const Allocator = struct {
             fn malloc(size: usize) callconv(.c) ?*anyopaque {
-                const byte_slice = allocator.alloc(u8, @sizeOf(usize) + size) catch unreachable;
+                const byte_slice = allocator_ptr.alloc(u8, @sizeOf(usize) + size) catch unreachable;
                 @as(*align(@alignOf(u8)) usize, @ptrCast(byte_slice.ptr)).* = byte_slice.len;
                 if (byte_slice.len == @sizeOf(usize) + 88 and leaked_first_88.len == 0) // FIXME
                     sdl.leaked_first_88 = byte_slice; // FIXME
                 return byte_slice[@sizeOf(usize)..].ptr;
             }
             fn calloc(nmemb: usize, size: usize) callconv(.c) ?*anyopaque {
-                var byte_slice = allocator.alloc(u8, @sizeOf(usize) + nmemb * size) catch unreachable;
+                var byte_slice = allocator_ptr.alloc(u8, @sizeOf(usize) + nmemb * size) catch unreachable;
                 @as(*align(@alignOf(u8)) usize, @ptrCast(byte_slice.ptr)).* = byte_slice.len;
                 byte_slice = byte_slice[@sizeOf(usize)..];
                 @memset(byte_slice, 0);
@@ -62,7 +66,7 @@ pub const sdl = struct {
                     return @This().malloc(size);
                 const saved_size = @as(*align(@alignOf(u8)) usize, @ptrCast(ptr)).*;
                 const byte_slice =
-                    allocator.realloc(ptr[0..saved_size], @sizeOf(usize) + size) catch unreachable;
+                    allocator_ptr.realloc(ptr[0..saved_size], @sizeOf(usize) + size) catch unreachable;
                 @as(*align(@alignOf(u8)) usize, @ptrCast(byte_slice.ptr)).* = byte_slice.len;
                 return byte_slice[@sizeOf(usize)..].ptr;
             }
@@ -70,7 +74,7 @@ pub const sdl = struct {
                 const ptr: [*]u8 =
                     if (maybe_ptr) |ptr| @ptrFromInt(@intFromPtr(ptr) - @sizeOf(usize)) else return;
                 const saved_size = @as(*align(@alignOf(u8)) usize, @ptrCast(ptr)).*;
-                allocator.free(ptr[0..saved_size]);
+                allocator_ptr.free(ptr[0..saved_size]);
             }
         };
         return .{ Allocator.malloc, Allocator.calloc, Allocator.realloc, Allocator.free };
@@ -94,9 +98,9 @@ pub const sdl = struct {
         pub fn failure(err: anyerror) c.SDL_AppResult {
             const trace = @errorReturnTrace();
             if (err == error.Sdl)
-                debug.print("{?}\n", .{trace})
+                debug.print("{any}\n", .{trace})
             else
-                debug.print("{}\n{?}\n", .{ err, trace });
+                debug.print("{}\n{any}\n", .{ err, trace });
             return c.SDL_APP_FAILURE;
         }
     };
@@ -183,9 +187,7 @@ test digitSizeOf {
 //___________________/ encapsulated \___________________
 pub var is_inited = false;
 pub var dt: f32 = undefined; // in milliseconds
-pub usingnamespace struct {
-    pub var allocator: mem.Allocator = undefined;
-};
+pub var allocator: mem.Allocator = undefined;
 var gpa: heap.GeneralPurposeAllocator(.{}) = undefined; // .{ .safety = false }
 
 pub const g = struct { // -ame
@@ -225,7 +227,8 @@ pub fn init(g_settings_filepath: []const u8) !void {
         const file = try fs.cwd().openFile(g_settings_filepath, .{});
         defer file.close();
 
-        var json_reader = json.reader(lib.allocator, file.reader());
+        // var file_reader_buf: [4096]u8 = undefined;
+        var json_reader = json.reader(lib.allocator, file.deprecatedReader()); // &file_reader_buf
         defer json_reader.deinit();
         json_reader.enableDiagnostics(&json_diagn);
 

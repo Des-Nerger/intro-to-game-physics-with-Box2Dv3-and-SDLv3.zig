@@ -10,7 +10,7 @@ const sdl = lib.sdl;
 const std = @import("std");
 const zigimg = @import("zigimg");
 
-pub fn Renderer(Ext: type) type {
+pub fn Renderer(WorldMixin: type) type {
     return struct {
         is_inited: bool = false,
 
@@ -27,10 +27,9 @@ pub fn Renderer(Ext: type) type {
         } = undefined,
         bitmap_font: *c.SDL_Texture = undefined,
         background: *c.SDL_Texture = undefined,
+        world: WorldMixin = .{},
 
         const Self = @This();
-
-        pub usingnamespace Ext;
 
         pub fn deinit(rx: *Self) void {
             defer rx.* = .{};
@@ -147,7 +146,7 @@ pub fn Renderer(Ext: type) type {
         pub fn draw(
             rx: *const Self,
             sprite_idx: usize,
-            center: lib.Vec2,
+            centr: lib.Vec2,
             maybe_rot: ?lib.Rot,
             maybe_scale: ?lib.Vec2,
         ) !void {
@@ -160,8 +159,8 @@ pub fn Renderer(Ext: type) type {
                 dest_rect.w *= scale.x;
                 dest_rect.h *= scale.y;
             }
-            dest_rect.x = center.x - dest_rect.w / 2.0;
-            dest_rect.y = center.y - dest_rect.h / 2.0;
+            dest_rect.x = centr.x - dest_rect.w / 2.0;
+            dest_rect.y = centr.y - dest_rect.h / 2.0;
             try if (maybe_rot) |rot|
                 sdl.expect(c.SDL_RenderTextureRotated(
                     rx.renderer,
